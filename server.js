@@ -58,7 +58,11 @@ io.on('connection', function (socket) {
   socket.on('leave-room', function(room) {
     const randomPersonSocket = getRandomSocket(socket.randomPersonSocketId)
     socket.leave(room)
-    if (randomPersonSocket) randomPersonSocket.leave(room)
+    delete socket.randomPersonSocketId
+    if (randomPersonSocket) {
+      randomPersonSocket.leave(room)
+      delete randomPersonSocket.randomPersonSocketId
+    }
     io.in(socket.room).emit('user-disconnected')
   })
 
@@ -76,18 +80,19 @@ io.on('connection', function (socket) {
     const randomPersonSocket = getRandomSocket(socket.randomPersonSocketId)
     io.in(socket.room).emit('user-disconnected')
 
-    io.of('/').in(socket.room).clients((error, socketIds) => {
-      if (error) throw error;
-      socketIds.forEach(socketId => io.sockets.sockets[socketId].leave('chat'))
-    })
+    // keep this for future reference
+    // io.of('/').in(socket.room).clients((error, socketIds) => {
+    //   if (error) throw error;
+    //   socketIds.forEach(socketId => io.sockets.sockets[socketId].leave('chat'))
+    // })
 
     // Leave rooms
-    // socket.leave(socket.room)
     // Empty sockets so, it will be free for next connection
     if (randomPersonSocket) {
+      randomPersonSocket.emit('user-disconnected')
       delete randomPersonSocket.randomPersonSocketId
       delete io.sockets.adapter.rooms[randomPersonSocket.id]
-      // randomPersonSocket.leave(randomPersonSocket.room)
+      randomPersonSocket.leave(randomPersonSocket.room)
     }
 
     // Deleting room so that memory leaks reduce
