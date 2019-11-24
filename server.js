@@ -1,8 +1,23 @@
 const app = require('express')()
 const server = require('http').Server(app)
 const cors = require('cors')
+const Sentry = require('@sentry/node')
+
+Sentry.init({ dsn: 'https://1b98a9bea5c04421a9524485215f8ad5@sentry.io/1832344' })
 
 app.use(cors())
+app.use(Sentry.Handlers.requestHandler())
+
+app.use(Sentry.Handlers.errorHandler({
+  shouldHandleError(error) {
+    // Capture all 404 and 500 errors
+    if (error.status === 404 || error.status === 500) {
+      return true
+    }
+    return false
+  }
+}))
+
 const port = 8081
 
 app.get('/', (req, res) => res.json({health: 'ok', status: 'success'}))
