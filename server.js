@@ -87,6 +87,11 @@ io.on('connection', function (socket) {
     }
   })
 
+  socket.on('user-typing', function(flag) {
+    const randomPersonSocket = getRandomSocket(socket.randomPersonSocketId)
+    randomPersonSocket.emit('strangerIsTyping', flag)
+  })
+
   socket.on('message', function({ room, message, socketId, time }) {
     io.in(room).emit('receive-message', { message, socketId, time })
   })
