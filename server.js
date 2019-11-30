@@ -23,7 +23,9 @@ const port = 8081
 app.get('/', (req, res) => res.json({health: 'ok', status: 'success'}))
 
 const io = require('socket.io')(server)
-
+io.males = 0
+io.females = 0
+io.trans = 0
 const generateRandomIndex = (from = 0, to = 1) => Math.floor(Math.random() * to) + from
 
 const getRandomSocketId = (list, index, currentSocket) => {
@@ -43,20 +45,14 @@ const connectRooms = (socket) => {
   const connectedSockets = Object.keys(io.sockets.connected)
   const randomSocketId = getRandomSocketId(connectedSockets, index, socket.id)
   const randomPersonSocket = getRandomSocket(randomSocketId)
-
   if (!socket.randomPersonSocketId && !randomPersonSocket.randomPersonSocketId) {
     const room = `${socket.id}_${randomSocketId}`
     
     socket.randomPersonSocketId = randomSocketId
     randomPersonSocket.randomPersonSocketId = socket.id
-    if (socket.room) {
-      socket.leave(socket.room)
-    }
+    if (socket.room) socket.leave(socket.room)
+    if (randomPersonSocket.room) randomPersonSocket.leave(randomPersonSocket.room)
 
-    if (randomPersonSocket.room) {
-      randomPersonSocket.leave(randomPersonSocket.room)
-    }
-    
     socket.room = room
     randomPersonSocket.room = room
 
@@ -67,8 +63,19 @@ const connectRooms = (socket) => {
   }
 }
 
+const updateGendersCount = (gender, flag) => {
+  if (gender === 'Male') flag ? io.males += 1 : io.males -= 1
+  if (gender === 'Female') flag ? io.females += 1 : io.females -= 1
+  if (gender === 'Trans') flag ? io.trans += 1 : io.trans -= 1
+  return { males: io.males, females: io.females, trans: io.trans }
+}
+
 io.on('connection', function (socket) {
-  io.emit('userCount', io.engine.clientsCount)
+  socket.on('gender', function(gender) {
+    socket.gender = gender
+    const genderObj = updateGendersCount(gender, true)
+    io.emit('gendersCount', genderObj)
+  })
 
   socket.on('leave-room', function(room) {
     const randomPersonSocket = getRandomSocket(socket.randomPersonSocketId)
@@ -82,14 +89,12 @@ io.on('connection', function (socket) {
   })
 
   socket.on('connect-new-room', function() {
-    if (io.engine.clientsCount > 1) {
-      connectRooms(socket)
-    }
+    if (io.engine.clientsCount > 1) connectRooms(socket)
   })
 
   socket.on('user-typing', function(flag) {
     const randomPersonSocket = getRandomSocket(socket.randomPersonSocketId)
-    randomPersonSocket.emit('strangerIsTyping', flag)
+    if (randomPersonSocket) randomPersonSocket.emit('strangerIsTyping', flag)
   })
 
   socket.on('message', function({ room, message, socketId, time }) {
@@ -118,7 +123,9 @@ io.on('connection', function (socket) {
     // Deleting room so that memory leaks reduce
     delete io.sockets.adapter.rooms[socket.id]
     delete socket.randomPersonSocketId
-    io.emit('userCount', io.engine.clientsCount)
+
+    const genderObj = updateGendersCount(socket.gender, false)
+    io.emit('gendersCount', genderObj)
   })
 })
 
