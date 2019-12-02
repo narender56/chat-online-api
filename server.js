@@ -46,20 +46,10 @@ const connectRooms = (socket) => {
   const randomSocketId = getRandomSocketId(connectedSockets, index, socket.id)
   const randomPersonSocket = getRandomSocket(randomSocketId)
   if (!socket.randomPersonSocketId && !randomPersonSocket.randomPersonSocketId) {
-    const room = `${socket.id}_${randomSocketId}`
-    
     socket.randomPersonSocketId = randomSocketId
     randomPersonSocket.randomPersonSocketId = socket.id
-    if (socket.room) socket.leave(socket.room)
-    if (randomPersonSocket.room) randomPersonSocket.leave(randomPersonSocket.room)
-
-    socket.room = room
-    randomPersonSocket.room = room
-
-    socket.join(room)
-    randomPersonSocket.join(room)
-    socket.emit('roomName', room)
-    randomPersonSocket.emit('roomName', room)
+    socket.emit('chatConnected', randomPersonSocket.gender)
+    randomPersonSocket.emit('chatConnected', socket.gender)
   }
 }
 
@@ -77,15 +67,14 @@ io.on('connection', function (socket) {
     io.emit('gendersCount', genderObj)
   })
 
-  socket.on('leave-room', function(room) {
+  socket.on('leave-room', function() {
     const randomPersonSocket = getRandomSocket(socket.randomPersonSocketId)
-    socket.leave(room)
-    delete socket.randomPersonSocketId
     if (randomPersonSocket) {
-      randomPersonSocket.leave(room)
       delete randomPersonSocket.randomPersonSocketId
+      randomPersonSocket.emit('chatDisconnected')
     }
-    io.in(socket.room).emit('user-disconnected')
+    delete socket.randomPersonSocketId
+    socket.emit('chatDisconnected')
   })
 
   socket.on('connect-new-room', function() {
@@ -97,31 +86,22 @@ io.on('connection', function (socket) {
     if (randomPersonSocket) randomPersonSocket.emit('strangerIsTyping', flag)
   })
 
-  socket.on('message', function({ room, message, socketId, time }) {
-    io.in(room).emit('receive-message', { message, socketId, time })
+  socket.on('message', function({ message, time }) {
+    const randomPersonSocket = getRandomSocket(socket.randomPersonSocketId)
+    randomPersonSocket.emit('messageReceived', { message, time })
   })
 
   socket.on('disconnect', function () {
     const randomPersonSocket = getRandomSocket(socket.randomPersonSocketId)
-    io.in(socket.room).emit('user-disconnected')
-
-    // keep this for future reference
-    // io.of('/').in(socket.room).clients((error, socketIds) => {
-    //   if (error) throw error;
-    //   socketIds.forEach(socketId => io.sockets.sockets[socketId].leave('chat'))
-    // })
 
     // Leave rooms
     // Empty sockets so, it will be free for next connection
     if (randomPersonSocket) {
-      randomPersonSocket.emit('user-disconnected')
+      randomPersonSocket.emit('chatDisconnected')
       delete randomPersonSocket.randomPersonSocketId
-      delete io.sockets.adapter.rooms[randomPersonSocket.id]
-      randomPersonSocket.leave(randomPersonSocket.room)
     }
 
     // Deleting room so that memory leaks reduce
-    delete io.sockets.adapter.rooms[socket.id]
     delete socket.randomPersonSocketId
 
     const genderObj = updateGendersCount(socket.gender, false)
