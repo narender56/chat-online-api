@@ -53,6 +53,16 @@ const connectRooms = (socket) => {
   }
 }
 
+const disconnect = (socket) => {
+  const randomPersonSocket = getRandomSocket(socket.randomPersonSocketId)
+  if (randomPersonSocket) {
+    delete randomPersonSocket.randomPersonSocketId
+    randomPersonSocket.emit('chatDisconnected')
+  }
+  delete socket.randomPersonSocketId
+  socket.emit('chatDisconnected')
+}
+
 const updateGendersCount = (gender, flag) => {
   if (gender === 'Male') flag ? io.males += 1 : io.males -= 1
   if (gender === 'Female') flag ? io.females += 1 : io.females -= 1
@@ -68,13 +78,7 @@ io.on('connection', function (socket) {
   })
 
   socket.on('leave-room', function() {
-    const randomPersonSocket = getRandomSocket(socket.randomPersonSocketId)
-    if (randomPersonSocket) {
-      delete randomPersonSocket.randomPersonSocketId
-      randomPersonSocket.emit('chatDisconnected')
-    }
-    delete socket.randomPersonSocketId
-    socket.emit('chatDisconnected')
+    disconnect(socket)
   })
 
   socket.on('connect-new-room', function() {
@@ -84,26 +88,17 @@ io.on('connection', function (socket) {
   socket.on('user-typing', function(flag) {
     const randomPersonSocket = getRandomSocket(socket.randomPersonSocketId)
     if (randomPersonSocket) randomPersonSocket.emit('strangerIsTyping', flag)
+    else disconnect()
   })
 
   socket.on('message', function({ message, time }) {
     const randomPersonSocket = getRandomSocket(socket.randomPersonSocketId)
-    randomPersonSocket.emit('messageReceived', { message, time })
+    if (randomPersonSocket) randomPersonSocket.emit('messageReceived', { message, time })
+    else disconnect()
   })
 
   socket.on('disconnect', function () {
-    const randomPersonSocket = getRandomSocket(socket.randomPersonSocketId)
-
-    // Leave rooms
-    // Empty sockets so, it will be free for next connection
-    if (randomPersonSocket) {
-      randomPersonSocket.emit('chatDisconnected')
-      delete randomPersonSocket.randomPersonSocketId
-    }
-
-    // Deleting room so that memory leaks reduce
-    delete socket.randomPersonSocketId
-
+    disconnect(socket)
     const genderObj = updateGendersCount(socket.gender, false)
     io.emit('gendersCount', genderObj)
   })
